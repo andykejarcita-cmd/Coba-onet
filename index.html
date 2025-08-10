@@ -1,61 +1,471 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Onet Game PWA</title>
-  <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#3b82f6"/>
-  <style>
-    body { font-family: sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
-    h1 { text-align: center; }
-    #board { display: grid; gap: 5px; justify-content: center; margin-top: 20px; }
-    .cell { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
-            background: #e2e8f0; border-radius: 4px; cursor: pointer; font-size: 24px; }
-    .selected { outline: 2px solid #3b82f6; }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Onet — PWA Full (Music, Hint x10, Levels, Smooth Path)</title>
+<meta name="theme-color" content="#2563eb"/>
+<style>
+  :root{--bg:#f8fafc;--card:#fff;--muted:#6b7280;--accent:#2563eb}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:Inter,system-ui,Arial;color:#0f172a}
+  .app{max-width:1100px;margin:18px auto;padding:18px}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+  h1{font-size:18px;margin:0}
+  .meta{margin-left:auto;display:flex;gap:8px;align-items:center}
+  .chip{background:var(--card);padding:6px 10px;border-radius:8px;box-shadow:0 1px 4px rgba(2,6,23,0.06);font-size:13px}
+  .controls{display:flex;gap:8px;margin:10px 0;flex-wrap:wrap}
+  button, select{padding:8px 12px;border-radius:8px;border:0;cursor:pointer;font-weight:600}
+  .btn-primary{background:var(--accent);color:white}
+  .btn-ghost{background:#eef2ff;color:#0f172a}
+  .board-wrap{position:relative;background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 20px rgba(2,6,23,0.06)}
+  #board{display:grid;gap:6px;user-select:none}
+  .cell{width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:6px;background:#f1f5f9;font-size:22px;cursor:pointer;transition:transform .12s;box-shadow:0 1px 0 rgba(16,24,40,0.02)}
+  @media (max-width:720px){ .cell{width:34px;height:34px;font-size:18px} }
+  .cell:hover{transform:scale(1.06)}
+  .cell.border{background:transparent;cursor:default;box-shadow:none}
+  .sel{outline:3px solid rgba(99,102,241,0.25);border-radius:6px}
+  .message{margin-top:8px;color:var(--muted);min-height:26px}
+  .small{font-size:12px;color:var(--muted)}
+  .footer{margin-top:12px;font-size:12px;color:var(--muted);text-align:center}
+  svg.overlay{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;overflow:visible}
+  .progress-wrap{margin:10px 0}
+  .progress{height:12px;background:#e6eefc;border-radius:999px;overflow:hidden}
+  .progress > i{display:block;height:100%;background:linear-gradient(90deg,#60a5fa,#3b82f6);width:0%;transition:width .5s}
+  .topbar {display:flex;gap:8px;align-items:center}
+  .music-control{display:flex;gap:8px;align-items:center}
+  input[type="range"]{width:90px}
+  .left-col {display:flex;flex-direction:column;gap:6px}
+</style>
 </head>
 <body>
-  <h1>Onet Game - PWA</h1>
-  <div>Skor: <span id="score">0</span></div>
-  <div id="board"></div>
-  <script>
-    const rows = 8, cols = 12;
-    const icons = ["🍎","🍌","🍇","🍒","🍉","🍍","🥝","🍑","🍓","🍋","🐶","🐱"];
-    let board = [], selected = null, score = 0;
-    function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
-    function buildBoard(){
-      const pairs = (rows*cols)/2;
-      const pool = [];
-      for(let i=0;i<pairs;i++){const icon = icons[i%icons.length];pool.push(icon,icon);}
-      shuffle(pool);
-      board = [];
-      for(let r=0;r<rows;r++){board[r]=[];for(let c=0;c<cols;c++){board[r][c]=pool.pop();}}
+<div class="app">
+  <header>
+    <h1>Onet — Full PWA</h1>
+    <div class="meta">
+      <div class="chip">Level: <strong id="levelDisplay">1</strong></div>
+      <div class="chip">Waktu: <strong id="timeDisplay">--</strong>s</div>
+      <div class="chip">Skor: <strong id="scoreDisplay">0</strong></div>
+      <div class="chip">Hints: <strong id="hintCount">10</strong></div>
+    </div>
+  </header>
+
+  <div class="controls topbar">
+    <div class="small">Mode:
+      <select id="modeSelect"><option value="normal">Normal</option><option value="timed">Timed</option></select>
+    </div>
+    <button id="resetBtn" class="btn-primary">Reset</button>
+    <button id="shuffleBtn" class="btn-ghost">Shuffle</button>
+    <button id="hintBtn" class="btn-ghost">Hint</button>
+    <button id="skipBtn" class="btn-ghost">Skip Level</button>
+
+    <div style="margin-left:auto" class="music-control">
+      <button id="musicBtn" class="btn-ghost">Play Music</button>
+      <label class="small">Vol <input id="vol" type="range" min="0" max="1" step="0.01" value="0.12"></label>
+    </div>
+  </div>
+
+  <div class="progress-wrap">
+    <div class="small">Progress papan:</div>
+    <div class="progress"><i id="progressBar"></i></div>
+  </div>
+
+  <div class="board-wrap" id="boardWrap">
+    <svg class="overlay" id="overlay"></svg>
+    <div id="board" role="grid" aria-label="Game board"></div>
+  </div>
+
+  <div class="left-col" style="margin-top:12px;">
+    <div class="message" id="message">Klik dua sel bergambar yang sama. Garis mengikuti jalur dan dianimasikan.</div>
+    <div class="small">Jika fitur PWA/Audio lama tidak muncul, bersihkan cache & unregister service worker, lalu reload.</div>
+  </div>
+
+  <div class="footer">Untuk install: buka menu browser → Add to Home screen / Install app.</div>
+</div>
+
+<script>
+/* ===== CONFIG ===== */
+const LEVELS = [
+  {level:1, rows:10, cols:12, time:140},
+  {level:2, rows:10, cols:14, time:120},
+  {level:3, rows:12, cols:16, time:100},
+  {level:4, rows:14, cols:18, time:80},
+];
+const ICONS = ["🍎","🍌","🍇","🍒","🍉","🍍","🥝","🍑","🍓","🍋","🐶","🐱","🐭","🐼","🐵","🦊","🐯","🐸","🦁","🐰","🦄","🌟","🚗","✈️"];
+const MAX_HINTS = 10;
+
+/* ===== STATE ===== */
+let board=[], selected=null, score=0, timer=null, timeLeft=0, levelIndex=0, hints=MAX_HINTS;
+let audioCtx=null, musicGain=null, musicOsc1=null, musicOsc2=null, musicPlaying=false;
+
+const boardEl = document.getElementById('board');
+const overlay = document.getElementById('overlay');
+const messageEl = document.getElementById('message');
+const levelDisplay = document.getElementById('levelDisplay');
+const timeDisplay = document.getElementById('timeDisplay');
+const scoreDisplay = document.getElementById('scoreDisplay');
+const hintCount = document.getElementById('hintCount');
+const progressBar = document.getElementById('progressBar');
+
+/* ===== UTIL ===== */
+function shuffleArray(arr){ const a=arr.slice(); for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; }
+
+function buildBoard(rows, cols){
+  const innerRows = rows - 2, innerCols = cols - 2;
+  const innerCells = innerRows * innerCols;
+  if(innerCells % 2 !== 0) throw 'inner-even';
+  const pairs = innerCells/2;
+  const iconsNeeded = [];
+  for(let i=0;i<pairs;i++){ iconsNeeded.push(ICONS[i % ICONS.length], ICONS[i % ICONS.length]); }
+  const placed = shuffleArray(iconsNeeded);
+  const newBoard = Array.from({length:rows},()=>Array(cols).fill(null));
+  let idx=0;
+  for(let r=1;r<rows-1;r++) for(let c=1;c<cols-1;c++) newBoard[r][c]=placed[idx++];
+  return newBoard;
+}
+
+/* ===== PATHFINDING (BFS with dir+turns + parent) returns path coords or null ===== */
+function findPath(b, r1,c1, r2,c2){
+  if(r1===r2 && c1===c2) return null;
+  const rows=b.length, cols=b[0].length;
+  const isEmpty=(r,c)=> r>=0 && r<rows && c>=0 && c<cols && b[r][c]==null;
+  const dirs=[[-1,0],[1,0],[0,-1],[0,1]];
+  const visited = Array.from({length:rows},()=>Array.from({length:cols},()=>Array(4).fill(Infinity)));
+  const nodes = []; // {r,c,d,turns,parent}
+  const queue = [];
+  for(let d=0; d<4; d++){
+    const nr=r1+dirs[d][0], nc=c1+dirs[d][1];
+    if((nr===r2 && nc===c2) || isEmpty(nr,nc)){
+      visited[nr][nc][d]=0;
+      nodes.push({r:nr,c:nc,d,turns:0,parent:-1});
+      queue.push(nodes.length-1);
     }
-    function render(){
-      const b=document.getElementById("board");
-      b.style.gridTemplateColumns = `repeat(${cols}, 40px)`;
-      b.innerHTML="";
-      board.forEach((row,r)=>row.forEach((cell,c)=>{
-        const div=document.createElement("div");
-        div.className="cell"+(selected && selected.r===r && selected.c===c?" selected":"");
-        div.textContent=cell||"";
-        div.onclick=()=>clickCell(r,c);
-        b.appendChild(div);
-      }));
-    }
-    function clickCell(r,c){
-      if(!board[r][c])return;
-      if(!selected){selected={r,c};render();return;}
-      if(selected.r===r&&selected.c===c){selected=null;render();return;}
-      if(board[selected.r][selected.c]===board[r][c]){
-        board[selected.r][selected.c]=null;board[r][c]=null;score+=10;
-        document.getElementById("score").textContent=score;
+  }
+  let foundIndex=-1;
+  while(queue.length){
+    const idx = queue.shift();
+    const cur = nodes[idx];
+    if(cur.r===r2 && cur.c===c2 && cur.turns<=2){ foundIndex = idx; break; }
+    for(let nd=0; nd<4; nd++){
+      const nr = cur.r + dirs[nd][0], nc = cur.c + dirs[nd][1];
+      const newTurns = cur.turns + (nd===cur.d ? 0 : 1);
+      if(newTurns>2) continue;
+      if((nr===r2 && nc===c2) || isEmpty(nr,nc)){
+        if(visited[nr][nc][nd] > newTurns){
+          visited[nr][nc][nd] = newTurns;
+          nodes.push({r:nr,c:nc,d:nd,turns:newTurns,parent:idx});
+          queue.push(nodes.length-1);
+        }
       }
-      selected=null;render();
     }
-    buildBoard();render();
-    if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js');}
-  </script>
+  }
+  if(foundIndex<0) return null;
+  const rev = [];
+  let curIdx = foundIndex;
+  while(curIdx!==-1){
+    const n = nodes[curIdx];
+    rev.push([n.r, n.c]);
+    curIdx = n.parent;
+  }
+  rev.push([r1, c1]);
+  const full = rev.reverse();
+  // simplify collinear points
+  const simplified = [];
+  for(let i=0;i<full.length;i++){
+    if(i===0){ simplified.push(full[i]); continue; }
+    if(i===1){ simplified.push(full[i]); continue; }
+    const a = full[i-2], b = full[i-1], c = full[i];
+    const dx1 = b[0]-a[0], dy1 = b[1]-a[1];
+    const dx2 = c[0]-b[0], dy2 = c[1]-b[1];
+    if(dx1===dx2 && dy1===dy2){
+      simplified[simplified.length-1] = c;
+    } else simplified.push(c);
+  }
+  if(simplified[0][0]!==r1 || simplified[0][1]!==c1) simplified.unshift([r1,c1]);
+  const last = simplified[simplified.length-1];
+  if(last[0]!==r2 || last[1]!==c2) simplified.push([r2,c2]);
+  return simplified.map(p=>({r:p[0],c:p[1]}));
+}
+
+/* ===== RENDER ===== */
+function render(){
+  const rows = board.length, cols = board[0].length;
+  boardEl.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  boardEl.innerHTML = '';
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      if(r===0 || r===rows-1 || c===0 || c===cols-1) cell.classList.add('border');
+      cell.dataset.r = r; cell.dataset.c = c;
+      cell.textContent = board[r][c] || '';
+      if(selected && selected.r==r && selected.c==c) cell.classList.add('sel');
+      cell.onclick = () => onCellClick(r,c,cell);
+      boardEl.appendChild(cell);
+    }
+  }
+  setTimeout(()=> overlay.setAttribute('viewBox','0 0 '+boardEl.clientWidth+' '+boardEl.clientHeight),50);
+  updateProgress();
+}
+
+/* convert cell index to center coords */
+function cellCenterPosition(r,c){
+  const children = Array.from(boardEl.children);
+  const idx = r*board[0].length + c;
+  const el = children[idx];
+  if(!el) return null;
+  const rect = el.getBoundingClientRect();
+  const parentRect = boardEl.getBoundingClientRect();
+  return { x: rect.left - parentRect.left + rect.width/2, y: rect.top - parentRect.top + rect.height/2 };
+}
+
+/* create smooth svg path (quadratic through midpoints) */
+function buildSmoothPath(path){
+  if(!path || path.length<2) return '';
+  const pts = path.map(p => cellCenterPosition(p.r, p.c)).filter(Boolean);
+  if(pts.length<2) return '';
+  if(pts.length===2) return `M ${pts[0].x} ${pts[0].y} L ${pts[1].x} ${pts[1].y}`;
+  let d = `M ${pts[0].x} ${pts[0].y}`;
+  for(let i=0;i<pts.length-1;i++){
+    const a = pts[i], b = pts[i+1];
+    const mx = (a.x + b.x)/2, my = (a.y + b.y)/2;
+    d += ` Q ${a.x} ${a.y} ${mx} ${my}`;
+  }
+  d += ` T ${pts[pts.length-1].x} ${pts[pts.length-1].y}`;
+  return d;
+}
+
+function drawAnimatedPath(path){
+  const d = buildSmoothPath(path);
+  if(!d) return;
+  const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+  p.setAttribute('d', d);
+  p.setAttribute('stroke', 'rgba(59,130,246,0.95)');
+  p.setAttribute('stroke-width', Math.max(4, window.innerWidth<720?3:6));
+  p.setAttribute('fill', 'none');
+  p.setAttribute('stroke-linecap', 'round');
+  p.setAttribute('stroke-linejoin', 'round');
+  p.setAttribute('stroke-dasharray', '1000');
+  p.setAttribute('stroke-dashoffset', '1000');
+  overlay.appendChild(p);
+  const total = 520, start = performance.now();
+  function step(t){
+    const prog = Math.min(1, (t-start)/total);
+    p.setAttribute('stroke-dashoffset', String(1000 - 1000*prog));
+    p.setAttribute('opacity', String(1 - prog*0.3));
+    if(prog<1) requestAnimationFrame(step); else setTimeout(()=> p.remove(), 260);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ===== GAME LOGIC ===== */
+function onCellClick(r,c,cellEl){
+  // resume audio context on interaction if suspended
+  if(audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  playSfx('click');
+  if(timeLeft<=0) return;
+  if(r===0 || r===board.length-1 || c===0 || c===board[0].length-1) return;
+  if(!board[r][c]) return;
+  if(!selected){ selected={r,c}; render(); return; }
+  const r0 = selected.r, c0 = selected.c;
+  if(r0===r && c0===c){ selected=null; render(); return; }
+  if(board[r0][c0] !== board[r][c]){ selected={r,c}; render(); return; }
+  const path = findPath(board, r0, c0, r, c);
+  if(path){
+    drawAnimatedPath(path);
+    setTimeout(()=> {
+      board[r0][c0] = null; board[r][c] = null;
+      score += 10; scoreDisplay.textContent = score;
+      playSfx('success');
+      selected = null; render(); checkWin();
+    }, 240);
+  } else {
+    messageEl.textContent = 'Tidak bisa dihubungkan (lebih dari 2 putaran).';
+    selected = {r,c}; render();
+  }
+}
+
+/* hint search */
+function findHintAction(){
+  if(hints<=0){ messageEl.textContent='Hint habis.'; return; }
+  const rows = board.length, cols = board[0].length;
+  for(let r1=1;r1<rows-1;r1++){
+    for(let c1=1;c1<cols-1;c1++){
+      if(!board[r1][c1]) continue;
+      for(let r2=r1;r2<rows-1;r2++){
+        for(let c2=1;c2<cols-1;c2++){
+          if(r1===r2 && c1===c2) continue;
+          if(!board[r2][c2]) continue;
+          if(board[r1][c1] !== board[r2][c2]) continue;
+          const path = findPath(board, r1,c1,r2,c2);
+          if(path){
+            flashCells([[r1,c1],[r2,c2]]); drawAnimatedPath(path);
+            hints--; hintCount.textContent = hints; messageEl.textContent = 'Hint dipakai.'; return;
+          }
+        }
+      }
+    }
+  }
+  messageEl.textContent = 'Tidak ditemukan pasangan yang bisa dihubungkan.';
+}
+
+function flashCells(pairs){
+  const children = Array.from(boardEl.children);
+  pairs.forEach(([r,c])=>{
+    const idx = r*board[0].length + c;
+    const el = children[idx];
+    if(!el) return;
+    el.animate([{transform:'scale(1.06)'},{transform:'scale(1)'}],{duration:460,iterations:2});
+  });
+}
+
+function shuffleBoard(){
+  const flat=[];
+  for(let r=1;r<board.length-1;r++) for(let c=1;c<board[0].length-1;c++) if(board[r][c]) flat.push(board[r][c]);
+  const sh = shuffleArray(flat);
+  let idx=0;
+  for(let r=1;r<board.length-1;r++) for(let c=1;c<board[0].length-1;c++) if(board[r][c]!==null) board[r][c]=sh[idx++];
+  selected=null; render(); messageEl.textContent='Board di-shuffle.';
+}
+
+function checkWin(){
+  const allEmpty = board.every((row,r)=> row.every((cell,c)=> (r===0||r===board.length-1||c===0||c===board[0].length-1) ? true : cell==null));
+  if(allEmpty){
+    clearInterval(timer);
+    if(levelIndex < LEVELS.length-1){
+      messageEl.textContent = `Level ${LEVELS[levelIndex].level} selesai! Lanjut ke level ${LEVELS[levelIndex+1].level}...`;
+      setTimeout(()=> startLevel(levelIndex+1), 900);
+    } else {
+      messageEl.textContent = `Selamat! Semua level selesai. Skor akhir: ${score}`;
+    }
+  }
+}
+
+/* ===== PROGRESS/TIMER/LEVEL ===== */
+function updateProgress(){
+  const rows = board.length, cols = board[0].length;
+  let total=0, empty=0;
+  for(let r=1;r<rows-1;r++) for(let c=1;c<cols-1;c++){ total++; if(!board[r][c]) empty++; }
+  const percent = Math.round((empty/total)*100);
+  progressBar.style.width = percent+'%';
+}
+
+function startTimer(seconds){
+  clearInterval(timer);
+  timeLeft = seconds; timeDisplay.textContent = timeLeft;
+  timer = setInterval(()=>{
+    timeLeft--;
+    timeDisplay.textContent = timeLeft;
+    if(timeLeft<=0){ clearInterval(timer); messageEl.textContent='Waktu habis! Tekan Reset atau Coba Lagi.'; }
+  },1000);
+}
+
+function startLevel(index){
+  levelIndex = index;
+  const cfg = LEVELS[levelIndex];
+  board = buildBoard(cfg.rows, cfg.cols);
+  selected = null;
+  levelDisplay.textContent = cfg.level;
+  const mode = document.getElementById('modeSelect').value;
+  const timeForLevel = mode==='timed' ? Math.max(30, Math.floor(cfg.time * 0.75)) : cfg.time;
+  startTimer(timeForLevel);
+  render();
+  messageEl.textContent = `Level ${cfg.level} dimulai — Ukuran papan ${(cfg.rows-2)}x${(cfg.cols-2)}.`;
+}
+
+/* ===== AUDIO: WebAudio (music + sfx) ===== */
+async function ensureAudio(){
+  if(!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+}
+function playSfx(type='click'){
+  if(!audioCtx) return;
+  const now = audioCtx.currentTime;
+  if(type==='click'){
+    const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+    o.type='square'; o.frequency.setValueAtTime(880, now);
+    g.gain.setValueAtTime(0.06, now); g.gain.exponentialRampToValueAtTime(0.001, now+0.18);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start(now); o.stop(now+0.22);
+  } else if(type==='success'){
+    [440,660,880].forEach((f,i)=>{ const o=audioCtx.createOscillator(); const g=audioCtx.createGain();
+      o.type='sine'; o.frequency.setValueAtTime(f, now + i*0.01);
+      g.gain.setValueAtTime(0, now); g.gain.linearRampToValueAtTime(0.06 - i*0.015, now + i*0.01 + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.001, now + i*0.01 + 0.5);
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(now + i*0.01); o.stop(now + i*0.01 + 0.6);
+    });
+  }
+}
+
+document.getElementById('musicBtn').onclick = async ()=>{
+  try{
+    await ensureAudio();
+    if(!musicPlaying){
+      musicGain = audioCtx.createGain(); musicGain.gain.value = parseFloat(document.getElementById('vol').value);
+      musicGain.connect(audioCtx.destination);
+      musicOsc1 = audioCtx.createOscillator(); musicOsc1.type='sine'; musicOsc1.frequency.value=110;
+      musicOsc2 = audioCtx.createOscillator(); musicOsc2.type='sine'; musicOsc2.frequency.value=220;
+      musicOsc1.connect(musicGain); musicOsc2.connect(musicGain);
+      musicOsc1.start(); musicOsc2.start();
+      musicPlaying = true; document.getElementById('musicBtn').textContent='Pause Music';
+    } else {
+      musicGain.gain.linearRampToValueAtTime(0.0001, audioCtx.currentTime + 0.3);
+      setTimeout(()=>{ try{ musicOsc1.stop(); musicOsc2.stop(); }catch(e){} musicPlaying=false; document.getElementById('musicBtn').textContent='Play Music'; audioCtx.close(); audioCtx=null; }, 350);
+    }
+  }catch(err){
+    console.warn(err); messageEl.textContent='Audio memerlukan interaksi (klik) atau tidak tersedia di perangkat.'; 
+  }
+};
+document.getElementById('vol').oninput = ()=>{ if(musicGain) musicGain.gain.value = parseFloat(document.getElementById('vol').value); };
+
+/* ===== UI BINDINGS ===== */
+document.getElementById('resetBtn').onclick = ()=>{ score=0; scoreDisplay.textContent = score; hints=MAX_HINTS; hintCount.textContent = hints; startLevel(0); overlay.innerHTML=''; };
+document.getElementById('shuffleBtn').onclick = ()=>{ shuffleBoard(); overlay.innerHTML=''; };
+document.getElementById('hintBtn').onclick = ()=>{ findHintAction(); };
+document.getElementById('skipBtn').onclick = ()=>{ if(levelIndex<LEVELS.length-1) startLevel(levelIndex+1); else messageEl.textContent='Tidak ada level berikutnya.'; };
+document.getElementById('modeSelect').onchange = ()=> startLevel(levelIndex);
+
+/* ===== PWA: dynamic manifest & service worker (blob) ===== */
+(async function registerPWA(){
+  try{
+    // create blob service worker (simple network-first with cache fallback)
+    if('serviceWorker' in navigator){
+      const swCode = `
+        const CACHE = 'onet-pwa-cache-v1';
+        const OFFLINE_ASSETS = ['./'];
+        self.addEventListener('install', e => { self.skipWaiting(); });
+        self.addEventListener('activate', e => { self.clients.claim(); });
+        self.addEventListener('fetch', e => {
+          e.respondWith(fetch(e.request).catch(()=>caches.match(e.request)));
+        });
+      `;
+      const swBlob = new Blob([swCode], {type:'application/javascript'});
+      const swURL = URL.createObjectURL(swBlob);
+      await navigator.serviceWorker.register(swURL);
+      console.log('SW registered (blob).');
+    }
+    // dynamic manifest
+    const manifest = {
+      name: 'Onet PWA — Full',
+      short_name:'Onet',
+      start_url:'.',
+      display:'standalone',
+      background_color:'#f8fafc',
+      theme_color:'#2563eb',
+      icons:[{src:'',sizes:'192x192',type:'image/png'}]
+    };
+    const mBlob = new Blob([JSON.stringify(manifest)], {type:'application/json'});
+    const mURL = URL.createObjectURL(mBlob);
+    let link = document.querySelector('link[rel="manifest"]');
+    if(!link){ link = document.createElement('link'); link.rel = 'manifest'; document.head.appendChild(link); }
+    link.href = mURL;
+  }catch(e){ console.warn('PWA register failed', e); }
+})();
+
+/* ===== START ===== */
+scoreDisplay.textContent = score; hintCount.textContent = hints;
+startLevel(0);
+window.addEventListener('resize', ()=> overlay.setAttribute('viewBox','0 0 '+boardEl.clientWidth+' '+boardEl.clientHeight));
+</script>
 </body>
 </html>
