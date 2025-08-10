@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Onet Game PWA</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3b82f6"/>
+  <style>
+    body { font-family: sans-serif; background: #f8fafc; margin: 0; padding: 20px; }
+    h1 { text-align: center; }
+    #board { display: grid; gap: 5px; justify-content: center; margin-top: 20px; }
+    .cell { width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            background: #e2e8f0; border-radius: 4px; cursor: pointer; font-size: 24px; }
+    .selected { outline: 2px solid #3b82f6; }
+  </style>
+</head>
+<body>
+  <h1>Onet Game - PWA</h1>
+  <div>Skor: <span id="score">0</span></div>
+  <div id="board"></div>
+  <script>
+    const rows = 8, cols = 12;
+    const icons = ["🍎","🍌","🍇","🍒","🍉","🍍","🥝","🍑","🍓","🍋","🐶","🐱"];
+    let board = [], selected = null, score = 0;
+    function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+    function buildBoard(){
+      const pairs = (rows*cols)/2;
+      const pool = [];
+      for(let i=0;i<pairs;i++){const icon = icons[i%icons.length];pool.push(icon,icon);}
+      shuffle(pool);
+      board = [];
+      for(let r=0;r<rows;r++){board[r]=[];for(let c=0;c<cols;c++){board[r][c]=pool.pop();}}
+    }
+    function render(){
+      const b=document.getElementById("board");
+      b.style.gridTemplateColumns = `repeat(${cols}, 40px)`;
+      b.innerHTML="";
+      board.forEach((row,r)=>row.forEach((cell,c)=>{
+        const div=document.createElement("div");
+        div.className="cell"+(selected && selected.r===r && selected.c===c?" selected":"");
+        div.textContent=cell||"";
+        div.onclick=()=>clickCell(r,c);
+        b.appendChild(div);
+      }));
+    }
+    function clickCell(r,c){
+      if(!board[r][c])return;
+      if(!selected){selected={r,c};render();return;}
+      if(selected.r===r&&selected.c===c){selected=null;render();return;}
+      if(board[selected.r][selected.c]===board[r][c]){
+        board[selected.r][selected.c]=null;board[r][c]=null;score+=10;
+        document.getElementById("score").textContent=score;
+      }
+      selected=null;render();
+    }
+    buildBoard();render();
+    if('serviceWorker' in navigator){navigator.serviceWorker.register('service-worker.js');}
+  </script>
+</body>
+</html>
